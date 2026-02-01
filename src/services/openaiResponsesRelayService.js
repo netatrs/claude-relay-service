@@ -842,6 +842,165 @@ class OpenAIResponsesRelayService {
     const outputCost = (outputTokens / 1000) * rate.output
     return inputCost + outputCost
   }
+
+  async testAccountConnection(accountId, responseStream) {
+    const sendSSE = (type, data = {}) => {
+      if (!responseStream.destroyed && !responseStream.writableEnded) {
+        try {
+          responseStream.write(`data: ${JSON.stringify({ type, ...data })}\n\n`)
+        } catch { /* ignore */ }
+      }
+    }
+
+    const endTest = (success, error = null) => {
+      if (!responseStream.destroyed && !responseStream.writableEnded) {
+        try {
+          responseStream.write(`data: ${JSON.stringify({ type: 'test_complete', success, error: error || undefined })}\n\n`)
+          responseStream.end()
+        } catch { /* ignore */ }
+      }
+    }
+
+    try {
+      const fullAccount = await openaiResponsesAccountService.getAccount(accountId)
+      if (!fullAccount) {
+        throw new Error('Account not found')
+      }
+
+      logger.info(`🧪 Testing OpenAI-Responses account connection: ${fullAccount.name} (${accountId})`)
+
+      // Set SSE response headers
+      if (!responseStream.headersSent) {
+        responseStream.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no'
+        })
+      }
+
+      sendSSE('test_start', { message: 'Test started' })
+
+      // Build OpenAI-compatible test payload
+      const testPayload = {
+        model: fullAccount.defaultModel || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant. Reply briefly.' },
+          { role: 'user', content: 'hi' }
+        ],
+        max_tokens: 100,
+        stream: true
+      }
+
+      // Build target URL - use /v1/chat/completions
+      const baseUrl = fullAccount.baseApi.replace(/\/$/, '')
+      const apiUrl = `${baseUrl}/v1/chat/completions`
+
+      // Configure request
+      const requestConfig = {
+        method: 'POST',
+        url: apiUrl,
+        data: testPayload,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${fullAccount.apiKey}`
+        },
+        timeout: 30000,
+        responseType: 'stream',
+        validateStatus: () => true
+      }
+
+      // Add custom User-Agent if configured
+      if (fullAccount.userAgent) {
+        requestConfig.headers['User-Agent'] = fullAccount.userAgent
+      }
+
+      // Configure proxy if available
+      if (fullAccount.proxy) {
+        const proxyAgent = ProxyHelper.createProxyAgent(fullAccount.proxy)
+        if (proxyAgent) {
+          requestConfig.httpAgent = proxyAgent
+          requestConfig.httpsAgent = proxyAgent
+          requestConfig.proxy = false
+        }
+      }
+
+      const response = await axios(requestConfig)
+
+      // Handle non-200 response
+      if (response.status !== 200) {
+        return new Promise((resolve) => {
+          const chunks = []
+          response.data.on('data', (chunk) => chunks.push(chunk))
+          response.data.on('end', () => {
+            const errorData = Buffer.concat(chunks).toString()
+            let errorMsg = `API Error: ${response.status}`
+            try {
+              const json = JSON.parse(errorData)
+              errorMsg = json.error?.message || json.message || json.error || errorMsg
+            } catch {
+              if (errorData.length < 200) errorMsg = errorData || errorMsg
+            }
+            endTest(false, errorMsg)
+            resolve()
+          })
+          response.data.on('error', (err) => {
+            endTest(false, err.message)
+            resolve()
+          })
+        })
+      }
+
+      // Process successful streaming response (OpenAI SSE format)
+      return new Promise((resolve) => {
+        let buffer = ''
+
+        response.data.on('data', (chunk) => {
+          buffer += chunk.toString()
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue
+            const jsonStr = line.substring(5).trim()
+            if (!jsonStr || jsonStr === '[DONE]') continue
+
+            try {
+              const data = JSON.parse(jsonStr)
+              // OpenAI format: choices[0].delta.content
+              const content = data.choices?.[0]?.delta?.content
+              if (content) {
+                sendSSE('content', { text: content })
+              }
+              // Check for finish
+              if (data.choices?.[0]?.finish_reason) {
+                sendSSE('message_stop')
+              }
+            } catch { /* ignore parse errors */ }
+          }
+        })
+
+        response.data.on('end', () => {
+          endTest(true)
+          resolve()
+        })
+
+        response.data.on('error', (err) => {
+          endTest(false, err.message)
+          resolve()
+        })
+      })
+    } catch (error) {
+      logger.error(`❌ Test OpenAI-Responses account connection failed:`, error)
+      if (!responseStream.headersSent) {
+        responseStream.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache'
+        })
+      }
+      endTest(false, error.message)
+    }
+  }
 }
 
 module.exports = new OpenAIResponsesRelayService()

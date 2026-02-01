@@ -209,6 +209,7 @@ const platformLabel = computed(() => {
   const platform = props.account.platform
   if (platform === 'claude') return 'Claude OAuth'
   if (platform === 'claude-console') return 'Claude Console'
+  if (platform === 'openai-responses') return 'OpenAI Responses'
   return platform
 })
 
@@ -216,6 +217,7 @@ const platformIcon = computed(() => {
   if (!props.account) return 'fas fa-question'
   const platform = props.account.platform
   if (platform === 'claude' || platform === 'claude-console') return 'fas fa-brain'
+  if (platform === 'openai-responses') return 'fas fa-bolt'
   return 'fas fa-robot'
 })
 
@@ -227,6 +229,9 @@ const platformBadgeClass = computed(() => {
   }
   if (platform === 'claude-console') {
     return 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300'
+  }
+  if (platform === 'openai-responses') {
+    return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300'
   }
   return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
 })
@@ -345,6 +350,9 @@ function getTestEndpoint() {
   }
   if (platform === 'claude-console') {
     return `${API_PREFIX}/admin/claude-console-accounts/${props.account.id}/test`
+  }
+  if (platform === 'openai-responses') {
+    return `${API_PREFIX}/admin/openai-responses-accounts/${props.account.id}/test`
   }
   return ''
 }
@@ -478,6 +486,12 @@ watch(
       responseText.value = ''
       errorMessage.value = ''
       testDuration.value = 0
+      // Set default test model based on platform
+      if (props.account?.platform === 'openai-responses') {
+        testModel.value = 'gpt-4o-mini'
+      } else {
+        testModel.value = 'claude-sonnet-4-5-20250929'
+      }
     }
   }
 )

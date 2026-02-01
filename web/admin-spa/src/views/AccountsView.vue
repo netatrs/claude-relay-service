@@ -2459,7 +2459,7 @@ const closeAccountUsageModal = () => {
 }
 
 // 测试账户连通性相关函数
-const supportedTestPlatforms = ['claude', 'claude-console']
+const supportedTestPlatforms = ['claude', 'claude-console', 'openai-responses']
 
 const canTestAccount = (account) => {
   return !!account && supportedTestPlatforms.includes(account.platform)

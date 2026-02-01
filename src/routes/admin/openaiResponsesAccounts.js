@@ -5,6 +5,7 @@
 
 const express = require('express')
 const openaiResponsesAccountService = require('../../services/openaiResponsesAccountService')
+const openaiResponsesRelayService = require('../../services/openaiResponsesRelayService')
 const apiKeyService = require('../../services/apiKeyService')
 const accountGroupService = require('../../services/accountGroupService')
 const redis = require('../../models/redis')
@@ -444,6 +445,17 @@ router.post('/openai-responses-accounts/:id/reset-usage', authenticateAdmin, asy
       success: false,
       error: error.message
     })
+  }
+})
+
+// 测试 OpenAI-Responses 账户连通性（流式响应）
+router.post('/openai-responses-accounts/:id/test', authenticateAdmin, async (req, res) => {
+  const { id } = req.params
+
+  try {
+    await openaiResponsesRelayService.testAccountConnection(id, res)
+  } catch (error) {
+    logger.error(`❌ Failed to test OpenAI-Responses account:`, error)
   }
 })
 
