@@ -1673,6 +1673,62 @@
               </label>
             </div>
 
+            <!-- 翻译功能配置 -->
+            <div
+              v-if="form.platform === 'claude' || form.platform === 'claude-console'"
+              class="mt-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700"
+            >
+              <label class="flex items-start">
+                <input
+                  v-model="form.enableTranslation"
+                  class="mt-1 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                  type="checkbox"
+                />
+                <div class="ml-3">
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    🌐 启用中英双向翻译
+                  </span>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    启用后，用户的中文消息将翻译为英文发送给 AI，AI
+                    的英文回复将翻译为中文返回（代码不翻译）
+                  </p>
+                </div>
+              </label>
+
+              <!-- 翻译语言配置（仅在启用翻译时显示） -->
+              <div v-if="form.enableTranslation" class="ml-6 mt-3 space-y-3">
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">
+                      用户输入语言
+                    </label>
+                    <select
+                      v-model="form.translationSourceLang"
+                      class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                    >
+                      <option value="zh">中文 (Chinese)</option>
+                      <option value="en">英文 (English)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">
+                      AI 处理语言
+                    </label>
+                    <select
+                      v-model="form.translationTargetLang"
+                      class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                    >
+                      <option value="en">英文 (English)</option>
+                      <option value="zh">中文 (Chinese)</option>
+                    </select>
+                  </div>
+                </div>
+                <p class="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ 需要配置 TRANSLATION_ACCOUNT_ID 环境变量指定专用翻译账户
+                </p>
+              </div>
+            </div>
+
             <!-- Claude User-Agent 版本配置 -->
             <div v-if="form.platform === 'claude'" class="mt-4">
               <label class="flex items-start">
@@ -2692,6 +2748,62 @@
                 </p>
               </div>
             </label>
+          </div>
+
+          <!-- 翻译功能配置（编辑模式） -->
+          <div
+            v-if="form.platform === 'claude' || form.platform === 'claude-console'"
+            class="mt-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700"
+          >
+            <label class="flex items-start">
+              <input
+                v-model="form.enableTranslation"
+                class="mt-1 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                type="checkbox"
+              />
+              <div class="ml-3">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  🌐 启用中英双向翻译
+                </span>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  启用后，用户的中文消息将翻译为英文发送给 AI，AI
+                  的英文回复将翻译为中文返回（代码不翻译）
+                </p>
+              </div>
+            </label>
+
+            <!-- 翻译语言配置（仅在启用翻译时显示） -->
+            <div v-if="form.enableTranslation" class="ml-6 mt-3 space-y-3">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">
+                    用户输入语言
+                  </label>
+                  <select
+                    v-model="form.translationSourceLang"
+                    class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                  >
+                    <option value="zh">中文 (Chinese)</option>
+                    <option value="en">英文 (English)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">
+                    AI 处理语言
+                  </label>
+                  <select
+                    v-model="form.translationTargetLang"
+                    class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                  >
+                    <option value="en">英文 (English)</option>
+                    <option value="zh">中文 (Chinese)</option>
+                  </select>
+                </div>
+              </div>
+              <p class="text-xs text-amber-600 dark:text-amber-400">
+                ⚠️ 需要配置 TRANSLATION_ACCOUNT_ID 环境变量指定专用翻译账户
+              </p>
+            </div>
           </div>
 
           <!-- Claude User-Agent 版本配置（编辑模式） -->
@@ -4031,6 +4143,11 @@ const form = ref({
   serialQueueEnabled: (props.account?.maxConcurrency || 0) > 0, // 账户级串行队列开关
   interceptWarmup:
     props.account?.interceptWarmup === true || props.account?.interceptWarmup === 'true', // 拦截预热请求
+  // 翻译功能配置
+  enableTranslation:
+    props.account?.enableTranslation === true || props.account?.enableTranslation === 'true', // 启用翻译
+  translationSourceLang: props.account?.translationSourceLang || 'zh', // 用户输入语言
+  translationTargetLang: props.account?.translationTargetLang || 'en', // AI 处理语言
   groupId: '',
   groupIds: [],
   projectId: props.account?.projectId || '',
@@ -4618,6 +4735,10 @@ const buildClaudeAccountData = (tokenInfo, accountName, clientId) => {
     priority: form.value.priority || 50,
     autoStopOnWarning: form.value.autoStopOnWarning || false,
     interceptWarmup: form.value.interceptWarmup || false,
+    // 翻译功能配置
+    enableTranslation: form.value.enableTranslation || false,
+    translationSourceLang: form.value.translationSourceLang || 'zh',
+    translationTargetLang: form.value.translationTargetLang || 'en',
     useUnifiedUserAgent: form.value.useUnifiedUserAgent || false,
     useUnifiedClientId: form.value.useUnifiedClientId || false,
     unifiedClientId: clientId,
@@ -5473,6 +5594,10 @@ const updateAccount = async () => {
       data.priority = form.value.priority || 50
       data.autoStopOnWarning = form.value.autoStopOnWarning || false
       data.interceptWarmup = form.value.interceptWarmup || false
+      // 翻译功能配置
+      data.enableTranslation = form.value.enableTranslation || false
+      data.translationSourceLang = form.value.translationSourceLang || 'zh'
+      data.translationTargetLang = form.value.translationTargetLang || 'en'
       data.useUnifiedUserAgent = form.value.useUnifiedUserAgent || false
       data.useUnifiedClientId = form.value.useUnifiedClientId || false
       data.unifiedClientId = form.value.unifiedClientId || ''
@@ -5511,6 +5636,10 @@ const updateAccount = async () => {
       data.disableAutoProtection = !!form.value.disableAutoProtection
       // 拦截预热请求
       data.interceptWarmup = !!form.value.interceptWarmup
+      // 翻译功能配置
+      data.enableTranslation = form.value.enableTranslation || false
+      data.translationSourceLang = form.value.translationSourceLang || 'zh'
+      data.translationTargetLang = form.value.translationTargetLang || 'en'
       // 额度管理字段
       data.dailyQuota = form.value.dailyQuota || 0
       data.quotaResetTime = form.value.quotaResetTime || '00:00'
@@ -6081,6 +6210,11 @@ watch(
         autoStopOnWarning: newAccount.autoStopOnWarning || false,
         interceptWarmup:
           newAccount.interceptWarmup === true || newAccount.interceptWarmup === 'true',
+        // 翻译功能配置
+        enableTranslation:
+          newAccount.enableTranslation === true || newAccount.enableTranslation === 'true',
+        translationSourceLang: newAccount.translationSourceLang || 'zh',
+        translationTargetLang: newAccount.translationTargetLang || 'en',
         useUnifiedUserAgent: newAccount.useUnifiedUserAgent || false,
         useUnifiedClientId: newAccount.useUnifiedClientId || false,
         unifiedClientId: newAccount.unifiedClientId || '',

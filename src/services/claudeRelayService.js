@@ -17,6 +17,7 @@ const requestIdentityService = require('./requestIdentityService')
 const { createClaudeTestPayload } = require('../utils/testPayloadHelper')
 const userMessageQueueService = require('./userMessageQueueService')
 const { isStreamWritable } = require('../utils/streamHelper')
+const { requestTranslator, ResponseTranslator } = require('./translation')
 
 class ClaudeRelayService {
   constructor() {
@@ -311,7 +312,7 @@ class ClaudeRelayService {
       // 获取有效的访问token
       const accessToken = await claudeAccountService.getValidAccessToken(accountId)
 
-      const processedBody = this._processRequestBody(requestBody, account)
+      const processedBody = await this._processRequestBody(requestBody, account)
 
       // 获取代理配置
       const proxyAgent = await this._getProxyAgent(accountId)
@@ -679,13 +680,24 @@ class ClaudeRelayService {
   }
 
   // 🔄 处理请求体
-  _processRequestBody(body, account = null) {
+  async _processRequestBody(body, account = null) {
     if (!body) {
       return body
     }
 
     // 深拷贝请求体
     const processedBody = JSON.parse(JSON.stringify(body))
+
+    // 🌐 请求翻译：如果账户启用了翻译功能，将用户消息从中文翻译为英文
+    if (account?.enableTranslation === true || account?.enableTranslation === 'true') {
+      try {
+        await requestTranslator.translateRequest(processedBody, account)
+        logger.debug('[ClaudeRelayService] Request translation completed')
+      } catch (error) {
+        // 翻译失败时降级使用原始请求，不影响主流程
+        logger.warn('[ClaudeRelayService] Request translation failed, using original:', error.message)
+      }
+    }
 
     // 验证并限制max_tokens参数
     this._validateAndLimitMaxTokens(processedBody)
@@ -1465,7 +1477,7 @@ class ClaudeRelayService {
       // 获取有效的访问token
       const accessToken = await claudeAccountService.getValidAccessToken(accountId)
 
-      const processedBody = this._processRequestBody(requestBody, account)
+      const processedBody = await this._processRequestBody(requestBody, account)
 
       // 获取代理配置
       const proxyAgent = await this._getProxyAgent(accountId)
@@ -1505,7 +1517,10 @@ class ClaudeRelayService {
               )
             }
           }
-        }
+        },
+        0, // retryCount
+        // 🌐 响应翻译：如果账户启用了翻译，则开启响应翻译
+        account?.enableTranslation === true || account?.enableTranslation === 'true'
       )
     } catch (error) {
       // 客户端主动断开连接是正常情况，使用 INFO 级别
@@ -1548,7 +1563,8 @@ class ClaudeRelayService {
     requestOptions = {},
     isDedicatedOfficialAccount = false,
     onResponseStart = null, // 📬 新增：收到响应头时的回调，用于提前释放队列锁
-    retryCount = 0 // 🔄 403 重试计数器
+    retryCount = 0, // 🔄 403 重试计数器
+    enableResponseTranslation = false // 🌐 是否启用响应翻译
   ) {
     const maxRetries = 2 // 最大重试次数
     // 获取账户信息用于统一 User-Agent
@@ -1698,7 +1714,8 @@ class ClaudeRelayService {
                   requestOptions,
                   isDedicatedOfficialAccount,
                   onResponseStart,
-                  retryCount + 1
+                  retryCount + 1,
+                  enableResponseTranslation
                 )
                 resolve(retryResult)
               } catch (retryError) {
@@ -1857,6 +1874,13 @@ class ClaudeRelayService {
         let currentUsageData = {} // 当前正在收集的usage数据
         let rateLimitDetected = false // 限流检测标志
 
+        // 🌐 响应翻译器（如果启用）
+        let responseTranslator = null
+        if (enableResponseTranslation) {
+          responseTranslator = new ResponseTranslator({ enableTranslation: true }, responseStream)
+          logger.debug('[ClaudeRelayService] Response translation enabled')
+        }
+
         // 监听数据块，解析SSE并寻找usage信息
         res.on('data', (chunk) => {
           try {
@@ -1869,7 +1893,8 @@ class ClaudeRelayService {
             buffer = lines.pop() || '' // 保留最后的不完整行
 
             // 转发已处理的完整行到客户端
-            if (lines.length > 0) {
+            // 🌐 如果启用了响应翻译，延迟到解析后由 responseTranslator 处理
+            if (lines.length > 0 && !responseTranslator) {
               if (isStreamWritable(responseStream)) {
                 const linesToForward = lines.join('\n') + (lines.length > 0 ? '\n' : '')
                 // 如果有流转换器，应用转换
@@ -1894,10 +1919,22 @@ class ClaudeRelayService {
               if (line.startsWith('data:')) {
                 const jsonStr = line.slice(5).trimStart()
                 if (!jsonStr || jsonStr === '[DONE]') {
+                  // 🌐 响应翻译：透传非数据事件
+                  if (responseTranslator && isStreamWritable(responseStream)) {
+                    responseStream.write(line + '\n')
+                  }
                   continue
                 }
                 try {
                   const data = JSON.parse(jsonStr)
+
+                  // 🌐 响应翻译：通过 responseTranslator 处理事件
+                  if (responseTranslator) {
+                    // 异步处理，不阻塞主流程
+                    responseTranslator.processEvent(data).catch((err) => {
+                      logger.warn('[ClaudeRelayService] Response translation error:', err.message)
+                    })
+                  }
 
                   // 收集来自不同事件的usage数据
                   if (data.type === 'message_start' && data.message && data.message.usage) {

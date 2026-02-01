@@ -586,7 +586,10 @@ router.post('/claude-accounts', authenticateAdmin, async (req, res) => {
       expiresAt,
       extInfo,
       maxConcurrency,
-      interceptWarmup
+      interceptWarmup,
+      enableTranslation,
+      translationSourceLang,
+      translationTargetLang
     } = req.body
 
     if (!name) {
@@ -633,7 +636,10 @@ router.post('/claude-accounts', authenticateAdmin, async (req, res) => {
       expiresAt: expiresAt || null, // 账户订阅到期时间
       extInfo: extInfo || null,
       maxConcurrency: maxConcurrency || 0, // 账户级串行队列：0=使用全局配置，>0=强制启用
-      interceptWarmup: interceptWarmup === true // 拦截预热请求：默认为false
+      interceptWarmup: interceptWarmup === true, // 拦截预热请求：默认为false
+      enableTranslation: enableTranslation === true, // 是否启用翻译：默认为false
+      translationSourceLang: translationSourceLang || 'zh', // 用户输入语言：默认中文
+      translationTargetLang: translationTargetLang || 'en' // AI 处理语言：默认英文
     })
 
     // 如果是分组类型，将账户添加到分组

@@ -93,7 +93,10 @@ class ClaudeAccountService {
       expiresAt = null, // 账户订阅到期时间
       extInfo = null, // 额外扩展信息
       maxConcurrency = 0, // 账户级用户消息串行队列：0=使用全局配置，>0=强制启用串行
-      interceptWarmup = false // 拦截预热请求（标题生成、Warmup等）
+      interceptWarmup = false, // 拦截预热请求（标题生成、Warmup等）
+      enableTranslation = false, // 是否启用翻译功能
+      translationSourceLang = 'zh', // 用户输入语言
+      translationTargetLang = 'en' // AI 处理语言
     } = options
 
     const accountId = uuidv4()
@@ -142,7 +145,11 @@ class ClaudeAccountService {
         // 账户级用户消息串行队列限制
         maxConcurrency: maxConcurrency.toString(),
         // 拦截预热请求
-        interceptWarmup: interceptWarmup.toString()
+        interceptWarmup: interceptWarmup.toString(),
+        // 翻译功能配置
+        enableTranslation: enableTranslation.toString(),
+        translationSourceLang: translationSourceLang || 'zh',
+        translationTargetLang: translationTargetLang || 'en'
       }
     } else {
       // 兼容旧格式
@@ -178,7 +185,11 @@ class ClaudeAccountService {
         // 账户级用户消息串行队列限制
         maxConcurrency: maxConcurrency.toString(),
         // 拦截预热请求
-        interceptWarmup: interceptWarmup.toString()
+        interceptWarmup: interceptWarmup.toString(),
+        // 翻译功能配置
+        enableTranslation: enableTranslation.toString(),
+        translationSourceLang: translationSourceLang || 'zh',
+        translationTargetLang: translationTargetLang || 'en'
       }
     }
 
@@ -227,7 +238,10 @@ class ClaudeAccountService {
       useUnifiedClientId,
       unifiedClientId,
       extInfo: normalizedExtInfo,
-      interceptWarmup
+      interceptWarmup,
+      enableTranslation,
+      translationSourceLang,
+      translationTargetLang
     }
   }
 
@@ -589,7 +603,11 @@ class ClaudeAccountService {
             // 账户级用户消息串行队列限制
             maxConcurrency: parseInt(account.maxConcurrency || '0', 10),
             // 拦截预热请求
-            interceptWarmup: account.interceptWarmup === 'true'
+            interceptWarmup: account.interceptWarmup === 'true',
+            // 翻译功能配置
+            enableTranslation: account.enableTranslation === 'true',
+            translationSourceLang: account.translationSourceLang || 'zh',
+            translationTargetLang: account.translationTargetLang || 'en'
           }
         })
       )
@@ -683,7 +701,10 @@ class ClaudeAccountService {
         'subscriptionExpiresAt',
         'extInfo',
         'maxConcurrency',
-        'interceptWarmup'
+        'interceptWarmup',
+        'enableTranslation',
+        'translationSourceLang',
+        'translationTargetLang'
       ]
       const updatedData = { ...accountData }
       let shouldClearAutoStopFields = false
